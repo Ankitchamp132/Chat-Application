@@ -1,0 +1,166 @@
+1 Client side code
+
+import socket
+import threading
+import tkinter as tk
+from tkinter import scrolledtext
+from tkinter import messagebox
+
+root=tk.Tk()
+root.geometry('600x600')
+root.title('Chat Application')
+root.resizable(False,False)
+
+root.grid_rowconfigure(0,weight=1)
+root.grid_rowconfigure(1,weight=4)
+root.grid_rowconfigure(2,weight=1)
+
+
+colour1='black'
+colour2='green'
+colour3='red'
+font1=('Bold',15)
+font2=('Bold',10)
+
+
+host='127.0.0.1'
+port_number=1010
+
+client=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+
+def add():
+    try:
+        client.connect((host,port_number))
+        update_msgtextbox('Successfully connected to the server')
+    except:
+        messagebox.showerror('Not able to connect to the server',f'Unable to connect to the server with ip {host} and port number {port_number}')
+    user=user_textbox.get()
+    if (user!=''):
+        client.sendall(user.encode())
+    else:
+        messagebox.showerror('Error','Name of user cannot be empty')
+        exit(0)
+    threading.Thread(target=listen_for_msg_from_server,args=(client, )).start()
+    user_button.config(state=tk.DISABLED)
+    user_textbox.config(state=tk.DISABLED)
+
+def send():
+    msg=msg_textbox.get()
+    if(msg!=''):
+        client.sendall(msg.encode())
+        msg_textbox.delete(0,len(msg))
+    else:
+        messagebox.showerror('Error','Empty message should not be here')  
+
+
+def update_msgtextbox(message):
+    msg_box.config(state=tk.NORMAL)
+    msg_box.insert(tk.END,message + '\n')
+    msg_box.config(state=tk.DISABLED)
+
+
+frame1=tk.Frame(root,width=600,height=100,bg=colour1)
+frame1.grid(row=0,column=0,sticky=tk.NSEW)
+frame2=tk.Frame(root,width=600,height=400,bg=colour2)
+frame2.grid(row=1,column=0,sticky=tk.NSEW)
+frame3=tk.Frame(root,width=600,height=100,bg=colour1)
+frame3.grid(row=2,column=0,sticky=tk.NSEW)
+
+user_label=tk.Label(frame1,text='ENTER THE USERNAME:',font=font1,bg=colour1,fg='white')
+user_label.pack(side=tk.LEFT,padx=15)
+user_textbox=tk.Entry(frame1,font=font1,bg='grey',fg='white',width=23)
+user_textbox.pack(side=tk.LEFT)
+user_button=tk.Button(frame1,text="Add",font=('Bold',13),bg=colour3,fg='white',command=add)
+user_button.pack(side=tk.LEFT,padx=15)
+
+msg_textbox=tk.Entry(frame3,font=font1,bg='grey',fg='white',width=40)
+msg_textbox.pack(side=tk.LEFT,padx=15)
+msg_button=tk.Button(frame3,text="Send",font=('Bold',13),bg=colour3,fg='white',command=send)
+msg_button.pack(side=tk.LEFT,padx=15)
+
+
+msg_box=scrolledtext.ScrolledText(frame2,font=font2,bg=colour2,fg='white',width=78,height=33)
+msg_box.config(state=tk.DISABLED)
+msg_box.pack(side=tk.TOP,pady=5)
+
+
+
+def listen_for_msg_from_server(client):
+    while(True):
+        msg=client.recv(2048).decode('utf-8')
+        if(msg!=''):
+            user=msg.split(':')[0]
+            content=msg.split(':')[1]
+            update_msgtextbox(f"[{user}]:{content}")
+
+        else:
+            messagebox.showerror('Error',"Message received from client is empty")
+        
+
+def func():
+    root.mainloop()  
+
+if __name__=='__main__':
+    func()
+
+
+
+
+2 Server side code
+
+import socket
+import threading
+
+host='127.0.0.1'
+port_number=1010
+active_client_list=[]
+
+
+def listen_for_messages(client,username):
+    while(True):
+        messages=client.recv(2048).decode('utf-8')
+        if(messages!=''):
+            final_message=username + ':' + messages
+            send_messages_to_all(final_message)
+        else:
+            print(f"The message send from client {username} is empty")    
+
+
+def send_messages_to_client(client,message):
+    client.sendall(message.encode())
+
+
+def send_messages_to_all(message):
+    for names in active_client_list:
+        send_messages_to_client(names[1],message)
+
+
+
+def client_handler(client):
+    while(True):
+        username=client.recv(2048).decode('utf-8')
+        if(username!=''):
+            active_client_list.append((username,client))
+            break
+        else:
+            print("Client username empty")
+    threading.Thread(target=listen_for_messages,args=(client,username, )).start()
+
+
+def func():
+    server=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    try:
+        server.bind((host,port_number))
+    except:
+        print(f"Sorry not able to bind to the host with ip address {host} and port number {port_number}")
+    server.listen(3)
+
+    while(True):
+        client,address=server.accept()
+        print(f"Successfully connected to client with ip address {address[0]} and port number {address[1]}")
+        threading.Thread(target=client_handler,args=(client, )).start()
+
+
+
+if __name__=='__main__':
+    func()
